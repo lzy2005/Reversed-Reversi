@@ -4,10 +4,13 @@ import random
 import time
 import math
 
+EXPLORE_CON = math.sqrt(2)
+OPT_CON = 0.5
+EVAL_CON = 0.5
+
 COLOR_BLACK=-1
 COLOR_WHITE=1
 COLOR_NONE=0
-EXPLORE_CON= math.sqrt(2) #
 
 random.seed(0)
 
@@ -32,6 +35,12 @@ class MCTS(object):
 		self.start_time = ai.start_time
 		self.root = Node(self.chessboard, None, self.color)
 
+	def print_situation(self, res):
+		print(f"total N: {self.root.n}")
+		print(f"pio win rate: {res.w/res.n}")
+		print(f"current color: {self.color}")
+		print(f"situation of all steps: {[(c.w/c.n, c.n) for c in self.root.children]}")
+
 	def get_next_move(self):
 		while time.time()-self.start_time < self.time_out-0.01:
 			node = self.search()
@@ -48,14 +57,11 @@ class MCTS(object):
 					node.children.append(Node(node.state.copy(), node, -node.color))
 				node = self.uct_select(node)
 				self.backward(node, rollout(node.state.copy(),node.color))
-		print(self.root.n)
 		if self.color == COLOR_BLACK: # Assume all children of root have been explored
 			res = max(self.root.children, key= lambda n: n.w/n.n)
 		else:
 			res = min(self.root.children, key=lambda n: n.w/n.n)
-		print(res.w/res.n)
-		print(self.color)
-		print([(c.w/c.n, c.n) for c in self.root.children])
+		self.print_situation(res)
 		res = np.where((self.root.state!=0)!=(res.state!=0))
 		return (res[0][0],res[1][0])
 
@@ -77,6 +83,17 @@ class MCTS(object):
 			node.n+=1
 			node.w+=w
 			node = node.parent
+
+@numba.jit(nopython=True)
+def rollout(chessboard, color):
+	while check_end(chessboard) == False:
+		candidate_list = get_candidate_list(chessboard, color)
+		if len(candidate_list) == 0:
+			color = -color
+		else:
+			get_next_board(chessboard, candidate_list[random.randint(0, len(candidate_list) - 1)], color)
+			color = -color
+	return judge(chessboard)
 
 class AI(object):
 	def __init__(self, chessboard_size, color , time_out):
@@ -136,11 +153,7 @@ def get_candidate_list(chessboard, color):
 def judge(chessboard):
 	sum_black = (chessboard==-1).sum()
 	sum_white = (chessboard== 1).sum()
-	if sum_black <sum_white:
-		return 1
-	if sum_black  == sum_white:
-		return 0.5
-	return 0
+	return 0.5 + (sum_white-sum_black)/64 * 0.5
 
 @numba.jit(nopython=True)
 def get_next_board(chessboard, pos, color):
@@ -160,14 +173,3 @@ def check_end(chessboard):
 	if len(get_candidate_list(chessboard, COLOR_WHITE)) > 0:
 		return False
 	return True
-
-@numba.jit(nopython=True)
-def rollout(chessboard, color):
-	while check_end(chessboard) == False:
-		candidate_list = get_candidate_list(chessboard, color)
-		if len(candidate_list) == 0:
-			color = -color
-		else:
-			get_next_board(chessboard, candidate_list[random.randint(0, len(candidate_list) - 1)], color)
-			color = -color
-	return judge(chessboard)

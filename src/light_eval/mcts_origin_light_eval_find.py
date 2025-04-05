@@ -4,36 +4,83 @@ import random
 import time
 import math
 
+from numpy import dtype
+
+EXPLORE_CON = math.sqrt(2)
+OPT_CON = 0.5
+GLOBAL_CON = 1
+PRAC_CON = 0.01
+DEEP_MUL = 1.05
+
 COLOR_BLACK=-1
 COLOR_WHITE=1
 COLOR_NONE=0
-EXPLORE_CON= math.sqrt(2) #
 
 random.seed(0)
 
 dx = np.array([0,1,1,1,0,-1,-1,-1], dtype=int)
 dy = np.array([1,1,0,-1,-1,-1,0,1], dtype=int)
 
+class Evaluator(object):
+	def __init__(self, chessboard_size):
+		self.map = np.zeros((chessboard_size, chessboard_size), dtype=int)
+		cnt = -1
+		for i in range(0, chessboard_size//2):
+			for j in range(i, chessboard_size//2):
+				cnt += 1
+				self.map[i][j] = cnt
+		for i in range(0, chessboard_size):
+			for j in range(0, chessboard_size):
+				ni ,nj = i, j
+				if ni>=chessboard_size-ni:
+					ni = chessboard_size-1-ni
+				if nj>=chessboard_size-nj:
+					nj = chessboard_size-1-nj
+				if nj<ni:
+					nt = ni
+					ni = nj
+					nj = nt
+				self.map[i][j]=self.map[ni][nj]
+		self.weight = np.array([0,0,0,0,0,0,0,0,0,0], dtype=int) #
+		self.weight_map = np.zeros([chessboard_size, chessboard_size], dtype=int)
+		for i in range(chessboard_size):
+			for j in range(chessboard_size):
+				self.weight_map[i][j] = self.weight[self.map[i][j]]
+	def eval(self, state):
+		return (state * self.weight_map).sum()
+
 class Node(object):
-	def __init__(self, state, parent, color):
+	def __init__(self, state, parent, color, val):
 		self.state = state
 		self.parent = parent
 		self.children = []
 		self.color = color
+		self.val = val
 		self.w = 0
 		self.n = 0
 
 class MCTS(object):
 	def __init__(self, ai, chessboard):
 		self.chessboard_size = ai.chessboard_size
+		self.evaluator = Evaluator(self.chessboard_size)
 		self.chessboard = chessboard
 		self.color = ai.color
 		self.time_out = ai.time_out
 		self.start_time = ai.start_time
-		self.root = Node(self.chessboard, None, self.color)
+		self.root = Node(self.chessboard, None, self.color, self.evaluator.eval(self.chessboard))
+		self.num_of_nodes = 1
+
+	def print_situation(self, res):
+		print(f"current color: {self.color}")
+		print(f"total N: {self.root.n} total win rate: {self.root.w/self.root.n} current val: {self.root.val}")
+		weights = np.array([child.val for child in self.root.children], dtype=np.float32)
+		weights *= GLOBAL_CON
+		weight_probs = softmax(weights)
+		print(f"prob situation: {weight_probs}")
+		print(f"num of nodes: {self.num_of_nodes}")
 
 	def get_next_move(self):
-		while time.time()-self.start_time < self.time_out-0.01:
+		while time.time()-self.start_time < self.time_out-0.005:
 			node = self.search()
 			if node.n==0:
 				self.backward(node, rollout(node.state.copy(),node.color))
@@ -43,19 +90,19 @@ class MCTS(object):
 					continue
 				candidate_list = get_candidate_list(node.state,node.color)
 				for pos in candidate_list:
-					node.children.append(Node(get_next_board(node.state.copy(),pos,node.color), node, -node.color))
+					next_board = get_next_board(node.state.copy(), pos, node.color)
+					node.children.append(Node(next_board, node, -node.color, self.evaluator.eval(next_board)))
+					self.num_of_nodes += 1
 				if len(node.children) == 0:
-					node.children.append(Node(node.state.copy(), node, -node.color))
+					node.children.append(Node(node.state.copy(), node, -node.color, self.evaluator.eval(node.state)))
+					self.num_of_nodes += 1
 				node = self.uct_select(node)
 				self.backward(node, rollout(node.state.copy(),node.color))
-		print(self.root.n)
 		if self.color == COLOR_BLACK: # Assume all children of root have been explored
-			res = max(self.root.children, key= lambda n: n.w/n.n)
+			res = max(self.root.children, key= lambda n: n.val)
 		else:
-			res = min(self.root.children, key=lambda n: n.w/n.n)
-		print(res.w / res.n)
-		print(self.color)
-		print([(c.w/c.n, c.n) for c in self.root.children])
+			res = min(self.root.children, key=lambda n: n.val)
+		self.print_situation(res)
 		res = np.where((self.root.state!=0)!=(res.state!=0))
 		return (res[0][0],res[1][0])
 
@@ -66,17 +113,23 @@ class MCTS(object):
 		return node
 
 	def uct_select(self, node):
-		log_total_n=math.log(node.n)
-		if node.color == COLOR_BLACK:
-			return max(node.children, key=lambda n: n.w/n.n+EXPLORE_CON*math.sqrt(log_total_n/n.n) if n.n!=0 else math.inf)
-		else:
-			return max(node.children, key=lambda n: (n.n-n.w)/n.n+EXPLORE_CON*math.sqrt(log_total_n/n.n) if n.n!=0 else math.inf)
+		weights = np.array([child.val for child in node.children], dtype=np.float32)
+		if node.color == COLOR_WHITE:
+			weights *= -1
+		weights *= GLOBAL_CON
+		weight_probs = softmax(weights)
+		elements = len(node.children)
+		res = np.random.choice(elements, p=weight_probs)
+		return node.children[res]
 
 	def backward(self, node, w):
+		c = 1
 		while node != None:
-			node.n+=1
-			node.w+=w
+			node.n += 1
+			node.w += (w+1)/2
+			node.val += c*w*PRAC_CON
 			node = node.parent
+			c *= DEEP_MUL
 
 class AI(object):
 	def __init__(self, chessboard_size, color , time_out):
@@ -137,10 +190,10 @@ def judge(chessboard):
 	sum_black = (chessboard==-1).sum()
 	sum_white = (chessboard== 1).sum()
 	if sum_black <sum_white:
-		return 1 + (sum_white-sum_black)/64 * 0.5
+		return 1
 	if sum_black  == sum_white:
-		return 0.5
-	return 0 + (sum_white-sum_black)/64 * 0.5
+		return 0
+	return -1
 
 @numba.jit(nopython=True)
 def get_next_board(chessboard, pos, color):
@@ -171,3 +224,8 @@ def rollout(chessboard, color):
 			get_next_board(chessboard, candidate_list[random.randint(0, len(candidate_list) - 1)], color)
 			color = -color
 	return judge(chessboard)
+
+@numba.jit(nopython=True)
+def softmax(x):
+	exp_x = np.exp(x-np.max(x))
+	return exp_x/np.sum(exp_x)

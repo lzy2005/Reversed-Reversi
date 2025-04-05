@@ -1,13 +1,13 @@
-import mcts_baseline as model2
-import mcts_baseline_mix as model1
+from baseline import mcts_baseline_mix as model1 # pio
+from hpc import mcts_hpc_mix as model2 # suc
 import numpy as np
 
 CHESSBOARD_SIZE = 8
-TIME_OUT = 2
+TIME_OUT = 3
 
 player = [model1.AI(CHESSBOARD_SIZE, -1, TIME_OUT), model2.AI(CHESSBOARD_SIZE, 1, TIME_OUT)]
 
-chessboard = np.zeros((CHESSBOARD_SIZE, CHESSBOARD_SIZE), dtype=int)
+chessboard = np.zeros((CHESSBOARD_SIZE, CHESSBOARD_SIZE), dtype=np.int8)
 chessboard[3][3] = chessboard[4][4] = 1
 chessboard[3][4] = chessboard[4][3] =-1
 now_player = 0

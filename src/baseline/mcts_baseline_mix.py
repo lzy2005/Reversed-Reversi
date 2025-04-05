@@ -4,43 +4,17 @@ import random
 import time
 import math
 
+EXPLORE_CON = math.sqrt(2)
+OPT_CON = 0.5
+
 COLOR_BLACK=-1
 COLOR_WHITE=1
 COLOR_NONE=0
-EXPLORE_CON= math.sqrt(2) #
 
 random.seed(0)
 
 dx = np.array([0,1,1,1,0,-1,-1,-1], dtype=int)
 dy = np.array([1,1,0,-1,-1,-1,0,1], dtype=int)
-
-class Evaluator(object):
-	def __init__(self, chessboard_size):
-		self.map = np.zeros((chessboard_size, chessboard_size))
-		cnt = -1
-		for i in range(0, chessboard_size//2):
-			for j in range(i, chessboard_size//2):
-				cnt += 1
-				self.map[i][j] = cnt
-		for i in range(0, chessboard_size):
-			for j in range(0, chessboard_size):
-				ni ,nj = i, j
-				if ni>=chessboard_size-ni:
-					ni = chessboard_size-ni
-				if nj>=chessboard_size-nj:
-					nj = chessboard_size-nj
-				if nj<ni:
-					nt = ni
-					ni = nj
-					nj = nt
-				self.map[i][j]=self.map[ni][nj]
-		self.weight = np.array([1,8,3,7,3,2,5,6,6,4])
-		self.weight_map = np.zeros([chessboard_size, chessboard_size])
-		for i in range(chessboard_size):
-			for j in range(chessboard_size):
-				self.weight_map[i][j] = self.weight[self.map[i][j]]
-	def eval(self, state):
-		return (state * self.weight_map).sum()
 
 class Node(object):
 	def __init__(self, state, parent, color):
@@ -54,7 +28,6 @@ class Node(object):
 class MCTS(object):
 	def __init__(self, ai, chessboard):
 		self.chessboard_size = ai.chessboard_size
-		self.evaluator = Evaluator(self.chessboard_size)
 		self.chessboard = chessboard
 		self.color = ai.color
 		self.time_out = ai.time_out
@@ -62,8 +35,15 @@ class MCTS(object):
 		self.root = Node(self.chessboard, None, self.color)
 		self.num_of_nodes = 1
 
+	def print_situation(self, res):
+		print(f"total N: {self.root.n}")
+		print(f"pio win rate: {res.w/res.n}")
+		print(f"current color: {self.color}")
+		print(f"situation of all steps: {[(c.w/c.n, c.n) for c in self.root.children]}")
+		print(f"num of nodes: {self.num_of_nodes}")
+
 	def get_next_move(self):
-		while time.time()-self.start_time < self.time_out-0.005:
+		while time.time()-self.start_time < self.time_out-0.01:
 			node = self.search()
 			if node.n==0:
 				self.backward(node, rollout(node.state.copy(),node.color))
@@ -77,17 +57,14 @@ class MCTS(object):
 					self.num_of_nodes += 1
 				if len(node.children) == 0:
 					node.children.append(Node(node.state.copy(), node, -node.color))
+					self.num_of_nodes += 1
 				node = self.uct_select(node)
 				self.backward(node, rollout(node.state.copy(),node.color))
-		print(self.root.n)
-		print(self.num_of_nodes)
-		print(self.color)
-		print(self.root.w/self.root.n)
 		if self.color == COLOR_BLACK: # Assume all children of root have been explored
 			res = max(self.root.children, key= lambda n: n.w/n.n)
 		else:
 			res = min(self.root.children, key=lambda n: n.w/n.n)
-		print(res.w/res.n)
+		self.print_situation(res)
 		res = np.where((self.root.state!=0)!=(res.state!=0))
 		return (res[0][0],res[1][0])
 
@@ -109,6 +86,17 @@ class MCTS(object):
 			node.n+=1
 			node.w+=w
 			node = node.parent
+
+@numba.jit(nopython=True)
+def rollout(chessboard, color):
+	while check_end(chessboard) == False:
+		candidate_list = get_candidate_list(chessboard, color)
+		if len(candidate_list) == 0:
+			color = -color
+		else:
+			get_next_board(chessboard, candidate_list[random.randint(0, len(candidate_list) - 1)], color)
+			color = -color
+	return judge(chessboard)
 
 class AI(object):
 	def __init__(self, chessboard_size, color , time_out):
@@ -168,11 +156,11 @@ def get_candidate_list(chessboard, color):
 def judge(chessboard):
 	sum_black = (chessboard==-1).sum()
 	sum_white = (chessboard== 1).sum()
-	if sum_black <sum_white:
-		return 1
-	if sum_black  == sum_white:
+	if sum_black < sum_white:
+		return 1 + (sum_white - sum_black) / 64 * OPT_CON
+	if sum_black == sum_white:
 		return 0.5
-	return 0
+	return 0 + (sum_white - sum_black) / 64 * OPT_CON
 
 @numba.jit(nopython=True)
 def get_next_board(chessboard, pos, color):
@@ -192,14 +180,3 @@ def check_end(chessboard):
 	if len(get_candidate_list(chessboard, COLOR_WHITE)) > 0:
 		return False
 	return True
-
-@numba.jit(nopython=True)
-def rollout(chessboard, color):
-	while check_end(chessboard) == False:
-		candidate_list = get_candidate_list(chessboard, color)
-		if len(candidate_list) == 0:
-			color = -color
-		else:
-			get_next_board(chessboard, candidate_list[random.randint(0, len(candidate_list) - 1)], color)
-			color = -color
-	return judge(chessboard)
