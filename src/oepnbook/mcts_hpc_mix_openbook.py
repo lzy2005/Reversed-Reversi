@@ -1,6 +1,5 @@
 import numpy as np
 import numba
-from numba.typed import List
 import random
 import time
 import math
@@ -11,7 +10,6 @@ SIZE_U = SIZE + 100
 
 EXPLORE_CON = math.sqrt(2)
 OPT_CON = 0.5
-TIME_END = 2
 
 COLOR_BLACK=-1
 COLOR_WHITE=1
@@ -82,7 +80,7 @@ def check(chessboard, x, y, color):
 @numba.jit(nopython=True)
 def get_candidate_list(chessboard, color):
 	idx = np.where(chessboard == COLOR_NONE)
-	candidate_list = List()
+	candidate_list = []
 	for i in range(len(idx[0])):
 		x, y = idx[0][i], idx[1][i]
 		if check(chessboard, x, y, color):
@@ -171,7 +169,6 @@ def print_situation(mct, res):
 		son = mct.next[son]
 	print()
 	print(f"num of nodes: {mct.last + 1}")
-	print(f"now_time: {time.time()}")
 
 @numba.jit(nopython=True)
 def aug(mct):
@@ -195,15 +192,10 @@ def aug(mct):
 
 @numba.jit(nopython=True)
 def get_final_move(mct):
-	if mct.head[mct.root] == -1: # if timeout
-		candidate_list = get_candidate_list(mct.state[mct.root], mct.color[mct.root])
-		for pos in candidate_list:
-			add_node(mct, get_next_board(mct.state[mct.root].copy(), pos, mct.color[mct.root]), mct.root, -mct.color[mct.root])
-
 	mct.children_cnt, child = 0, mct.head[mct.root]
 	while child != -1:
 		mct.children[mct.children_cnt] = child
-		mct.vals[mct.children_cnt] = mct.w[child]/mct.n[child] if mct.n[child] > 0 else math.inf
+		mct.vals[mct.children_cnt] = mct.w[child]/mct.n[child]
 		mct.children_cnt += 1
 		child = mct.next[child]
 	if mct.color[mct.root] == COLOR_BLACK:
@@ -215,8 +207,9 @@ def get_final_move(mct):
 	return (res[0][0],res[1][0])
 
 def get_next_move(mct):
-	while time.time()-mct.start_time < mct.time_out-TIME_END: # Test
+	while time.time()-mct.start_time < mct.time_out-0.1:
 		aug(mct)
+
 	return get_final_move(mct)
 
 @numba.jit(nopython=True)
@@ -267,7 +260,7 @@ class AI(object):
 		self.chessboard_size = chessboard_size
 		self.color = color
 		self.time_out = time_out
-		self.candidate_list = None
+		self.candidate_list = []
 		self.start_time = 0
 
 	def go(self, chessboard):
@@ -278,4 +271,4 @@ class AI(object):
 			mct = MCT(self.chessboard_size, self.color, self.time_out, self.start_time, chessboard)
 			mct.root = add_node(mct, chessboard, -1, self.color)
 			self.candidate_list.append(get_next_move(mct))
-		return list(self.candidate_list)
+		return self.candidate_list
