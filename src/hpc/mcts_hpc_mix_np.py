@@ -9,9 +9,9 @@ from numba.experimental import jitclass
 SIZE = 1000000
 SIZE_U = SIZE + 100
 
-EXPLORE_CON = math.sqrt(2)
+EXPLORE_CON = math.sqrt(2) #
 OPT_CON = 0.5
-TIME_END = 0.05
+TIME_END = 0.01
 
 COLOR_BLACK=-1
 COLOR_WHITE=1
@@ -124,8 +124,8 @@ def get_candidate_list(chessboard, color):
 	numba.types.Array(numba.int8, 2, 'C')
 ), nopython=True)
 def judge(chessboard):
-	sum_black = (chessboard == -1).sum()
-	sum_white = (chessboard == 1).sum()
+	sum_black = (chessboard==-1).sum()
+	sum_white = (chessboard== 1).sum()
 	if sum_black < sum_white:
 		return 1 + (sum_white - sum_black) / 64 * OPT_CON
 	if sum_black == sum_white:
@@ -243,7 +243,7 @@ def print_situation(mct, res):
 	print(f"num of nodes: {mct.last + 1}")
 	print(f"now_time: {time.time()}")
 
-# @numba.jit(nopython=True)
+@numba.jit(numba.types.Tuple([numba.types.int64, numba.types.int64])(MCT_TYPE), nopython=True)
 def get_final_move(mct):
 	if mct.head[mct.root] == -1: # if timeout
 		candidate_list = get_candidate_list(mct.state[mct.root], mct.color[mct.root])
@@ -260,7 +260,7 @@ def get_final_move(mct):
 		res=mct.children[np.argmax(mct.vals[0: mct.children_cnt])]
 	else:
 		res=mct.children[np.argmin(mct.vals[0: mct.children_cnt])]
-	print_situation(mct, res) #
+	# print_situation(mct, res) #
 	res = np.where((mct.state[mct.root]!=0)!=(mct.state[res]!=0))
 	return (res[0][0],res[1][0])
 
@@ -280,9 +280,9 @@ class AI(object):
 	def go(self, chessboard):
 		self.start_time = time.time()
 		chessboard = chessboard.astype(np.int8)
-		self.candidate_list = get_candidate_list(chessboard, self.color)
+		self.candidate_list = list(get_candidate_list(chessboard, self.color))
 		if len(self.candidate_list)!=0:
 			mct = MCT(self.chessboard_size, self.color, self.time_out, self.start_time, chessboard)
 			mct.root = add_node(mct, chessboard, -1, self.color)
 			self.candidate_list.append(get_next_move(mct))
-		return list(self.candidate_list)
+		return self.candidate_list

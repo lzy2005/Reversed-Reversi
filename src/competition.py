@@ -1,5 +1,5 @@
-from hpc import mcts_hpc as model1 # pio
-from hpc import mcts_hpc_mix as model2
+from hpc import mcts_hpc_mix as model1 # pio
+from hpc import mcts_hpc_mix_np as model2
 import numpy as np
 
 CHESSBOARD_SIZE = 8

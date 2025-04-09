@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="annot8@172.18.36.107:22 password (12)" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
       <paths name="annot8@127.0.0.1:22 password">
         <serverdata>
@@ -62,6 +62,13 @@
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="annot8@172.18.36.107:22 password (12)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/annot8/RR" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>
@@ -171,5 +178,6 @@
         </serverdata>
       </paths>
     </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>
