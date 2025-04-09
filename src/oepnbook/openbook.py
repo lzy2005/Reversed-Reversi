@@ -5,8 +5,8 @@ CHESSBOARD_SIZE = 8
 TIME_OUT = 100
 
 chessboard = np.zeros((CHESSBOARD_SIZE, CHESSBOARD_SIZE), dtype=np.int8)
-chessboard[3][3] = chessboard[4][4] = 1
-chessboard[3][4] = chessboard[4][3] =-1
+chessboard[3][3] = chessboard[4][4] = -1
+chessboard[3][4] = chessboard[4][3] = 1
 now_player = 0
 
 while(len(model1.get_candidate_list(chessboard,-1))+len(model1.get_candidate_list(chessboard,1))>0):
