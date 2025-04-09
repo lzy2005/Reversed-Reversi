@@ -64,7 +64,7 @@ class MCTS(object):
 			res = max(self.root.children, key= lambda n: n.w/n.n)
 		else:
 			res = min(self.root.children, key=lambda n: n.w/n.n)
-		self.print_situation(res)
+		# self.print_situation(res)
 		res = np.where((self.root.state!=0)!=(res.state!=0))
 		return (res[0][0],res[1][0])
 
