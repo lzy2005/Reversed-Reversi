@@ -9,9 +9,10 @@ from numba.experimental import jitclass
 SIZE = 1000000
 SIZE_U = SIZE + 100
 
-EXPLORE_CON = 2 #
+ADV_DEPTH = 60 #
+EXPLORE_CON = math.sqrt(2) #
 OPT_CON = 0.5
-TIME_END = 0.01
+TIME_END = 0.03 #
 
 COLOR_BLACK=-1
 COLOR_WHITE=1
@@ -35,6 +36,8 @@ spec = [
     ('color', numba.types.Array(numba.int8, 1, 'C')),
     ('w', numba.types.Array(numba.float32, 1, 'C')),
     ('n', numba.types.Array(numba.int32, 1, 'C')),
+	('dep', numba.types.Array(numba.int8, 1, 'C')),
+	('ans', numba.types.Array(numba.float32, 1, 'C')),
     ('last', numba.int32),
     ('root', numba.int32),
     ('children', numba.types.Array(numba.int32, 1, 'C')),
@@ -58,6 +61,8 @@ class MCT(object):
 		self.color = np.zeros(SIZE_U, dtype=np.int8)
 		self.w = np.zeros(SIZE_U, dtype=np.float32)
 		self.n = np.zeros(SIZE_U, dtype=np.int32)
+		self.dep = np.zeros(SIZE_U, dtype=np.int8)
+		self.ans = np.zeros(SIZE_U, dtype=np.float32)
 		self.last = -1
 
 		self.root = -1
@@ -154,8 +159,8 @@ def check_end(chessboard):
 		return False
 	return True
 
-@numba.jit(numba.int32(MCT_TYPE, numba.types.Array(numba.int8, 2, 'C'), numba.int32, numba.int8), nopython=True)
-def add_node(mct, state, parent, color):
+@numba.jit(numba.int32(MCT_TYPE, numba.types.Array(numba.int8, 2, 'C'), numba.int32, numba.int8, numba.int8), nopython=True)
+def add_node(mct, state, parent, color, depth):
 	mct.last += 1
 	mct.next[mct.last] = mct.head[parent]
 	mct.head[parent] = mct.last
@@ -165,6 +170,8 @@ def add_node(mct, state, parent, color):
 	mct.color[mct.last] = color
 	mct.w[mct.last] = 0
 	mct.n[mct.last] = 0
+	mct.dep[mct.last] = depth
+	mct.ans[mct.last] = -1
 	return mct.last
 
 @numba.jit(numba.int32(MCT_TYPE, numba.int32), nopython=True)
@@ -199,36 +206,69 @@ def backward(mct, node, w):
 
 @numba.jit(numba.float32(
 	numba.types.Array(numba.int8, 2, 'C'),
+	numba.int8,
+	numba.float32,
+numba.float32), nopython=True)
+def adv_search(chessboard, color, alpha, beta):
+	if check_end(chessboard):
+		return judge(chessboard)
+
+	candidate_list = get_candidate_list(chessboard, color)
+	if len(candidate_list) == 0:
+		return adv_search(chessboard, -color, alpha, beta)
+	if color == COLOR_BLACK:
+		value = -math.inf
+		for pos in candidate_list:
+			result = adv_search(get_next_board(chessboard.copy(), pos, color), -color, alpha, beta)
+			value = max(value, result)
+			alpha = max(alpha, value)
+			if alpha >= beta:
+				break
+		return value
+	else:
+		value = math.inf
+		for pos in candidate_list:
+			result = adv_search(get_next_board(chessboard.copy(), pos, color), -color, alpha, beta)
+			value = min(value, result)
+			beta = min(beta, value)
+			if beta <= alpha:
+				break
+		return value
+
+@numba.jit(numba.float32(
+	numba.types.Array(numba.int8, 2, 'C'),
+	numba.int8,
 numba.int8), nopython=True)
-def rollout(chessboard, color):
-	while check_end(chessboard) == False:
+def rollout(chessboard, color, depth):
+	while check_end(chessboard) == False and depth < ADV_DEPTH:
 		candidate_list = get_candidate_list(chessboard, color)
 		if len(candidate_list) == 0:
 			color = -color
 		else:
 			get_next_board(chessboard, candidate_list[random.randint(0, len(candidate_list) - 1)], color)
 			color = -color
-	return judge(chessboard)
+			depth += 1
+	return adv_search(chessboard, color, -math.inf, math.inf)
 
 @numba.jit(numba.void(MCT_TYPE), nopython=True)
 def aug(mct):
 	node = search(mct)
-	if mct.n[node] == 0:
-		backward(mct, node, rollout(mct.state[node].copy(), mct.color[node]))
+	if check_end(mct.state[node]) or (node != mct.root and mct.dep[node] >= ADV_DEPTH):
+		if mct.ans[node] == -1:
+			mct.ans[node] = adv_search(mct.state[node].copy(), mct.color[node], -math.inf, math.inf)
+		backward(mct, node, mct.ans[node])
+		return
+	elif mct.n[node] == 0:
+		backward(mct, node, rollout(mct.state[node].copy(), mct.color[node], mct.dep[node]))
 	else:
-		if check_end(mct.state[node]):
-			backward(mct, node, judge(mct.state[node]))
-			return
 		if mct.last > SIZE:
-			backward(mct, node, rollout(mct.state[node].copy(), mct.color[node]))
+			backward(mct, node, rollout(mct.state[node].copy(), mct.color[node], mct.dep[node]))
 			return
 		candidate_list = get_candidate_list(mct.state[node], mct.color[node])
 		for pos in candidate_list:
-			add_node(mct, get_next_board(mct.state[node].copy(), pos, mct.color[node]), node, -mct.color[node])
+			add_node(mct, get_next_board(mct.state[node].copy(), pos, mct.color[node]), node, -mct.color[node], mct.dep[node] + 1)
 		if mct.head[node] == -1:
-			add_node(mct, mct.state[node], node, -mct.color[node])
-		node = uct_select(mct, node)
-		backward(mct, node, rollout(mct.state[node].copy(), mct.color[node]))
+			add_node(mct, mct.state[node], node, -mct.color[node], mct.dep[node])
 
 def print_situation(mct, res):
 	print(f"total N: {mct.n[mct.root]}")
@@ -248,7 +288,7 @@ def get_final_move(mct):
 	if mct.head[mct.root] == -1: # if timeout
 		candidate_list = get_candidate_list(mct.state[mct.root], mct.color[mct.root])
 		for pos in candidate_list:
-			add_node(mct, get_next_board(mct.state[mct.root].copy(), pos, mct.color[mct.root]), mct.root, -mct.color[mct.root])
+			add_node(mct, get_next_board(mct.state[mct.root].copy(), pos, mct.color[mct.root]), mct.root, -mct.color[mct.root], mct.dep[mct.root] + 1)
 
 	mct.children_cnt, child = 0, mct.head[mct.root]
 	while child != -1:
@@ -283,6 +323,6 @@ class AI(object):
 		self.candidate_list = list(get_candidate_list(chessboard, self.color))
 		if len(self.candidate_list)!=0:
 			mct = MCT(self.chessboard_size, self.color, self.time_out, self.start_time, chessboard)
-			mct.root = add_node(mct, chessboard, -1, self.color)
+			mct.root = add_node(mct, chessboard, -1, self.color, np.sum(chessboard != COLOR_NONE))
 			self.candidate_list.append(get_next_move(mct))
 		return self.candidate_list

@@ -9,7 +9,7 @@ from numba.experimental import jitclass
 SIZE = 1000000
 SIZE_U = SIZE + 100
 
-EXPLORE_CON = 2 #
+EXPLORE_CON = 1.7 #
 OPT_CON = 0.5
 TIME_END = 0.01
 

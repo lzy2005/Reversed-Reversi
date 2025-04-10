@@ -9,7 +9,7 @@ from numba.experimental import jitclass
 SIZE = 1000000
 SIZE_U = SIZE + 100
 
-EXPLORE_CON = 2 #
+EXPLORE_CON = math.sqrt(2) #
 OPT_CON = 0.5
 TIME_END = 0.01
 
@@ -243,7 +243,7 @@ def print_situation(mct, res):
 	print(f"num of nodes: {mct.last + 1}")
 	print(f"now_time: {time.time()}")
 
-@numba.jit(numba.types.Tuple([numba.types.int64, numba.types.int64])(MCT_TYPE), nopython=True)
+# @numba.jit(numba.types.Tuple([numba.types.int64, numba.types.int64])(MCT_TYPE), nopython=True)
 def get_final_move(mct):
 	if mct.head[mct.root] == -1: # if timeout
 		candidate_list = get_candidate_list(mct.state[mct.root], mct.color[mct.root])
@@ -260,7 +260,7 @@ def get_final_move(mct):
 		res=mct.children[np.argmax(mct.vals[0: mct.children_cnt])]
 	else:
 		res=mct.children[np.argmin(mct.vals[0: mct.children_cnt])]
-	# print_situation(mct, res) #
+	print_situation(mct, res) #
 	res = np.where((mct.state[mct.root]!=0)!=(mct.state[res]!=0))
 	return (res[0][0],res[1][0])
 
