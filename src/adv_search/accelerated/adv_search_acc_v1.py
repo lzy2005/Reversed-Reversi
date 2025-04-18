@@ -253,6 +253,7 @@ def get_next_move(chessboard, color, end_time):
 	candidate_list = get_candidate_list(chessboard, color)
 	res = candidate_list[0]
 	sum_chess = (chessboard != 0).sum()
+	ite_times = 0
 	for max_depth in range(1, 64 - sum_chess + 1):
 		if end_time - time.time() < 0.03:
 			break
@@ -260,9 +261,10 @@ def get_next_move(chessboard, color, end_time):
 		extend(ast, chessboard, color, 0, max_depth)
 		while ast.ended == False and end_time -time.time() >= 0.03:
 			adv_iterate(ast, max_depth)
+			ite_times += 1000
 		if ast.ended ==True:
 			res = ast.res
-		print(f"now depth {max_depth} | now time {time.time() - end_time + 3} | now val {ast.value[0]} | hpc")
+		print(f"now depth {max_depth} | now time {time.time() - end_time + 5} | now val {ast.value[0]} | ite_times {ite_times}")
 	print(f" ext time {time.time() - end_time + 0.03}")
 	return res
 

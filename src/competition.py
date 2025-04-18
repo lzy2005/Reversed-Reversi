@@ -3,7 +3,7 @@ from adv_search.accelerated import adv_search_acc_v1 as model2
 import numpy as np
 
 CHESSBOARD_SIZE = 8
-TIME_OUT = 3
+TIME_OUT = 5
 
 count = 0
 model1_win = 0
